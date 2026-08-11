@@ -42,19 +42,16 @@ class Chat:
 
     async def generate_rag_answer(self,question: str,limit: int = 5):
 
-        # 1. Retrieve relevant documents
         results = await self.search_documents(
             question,
             limit
         )
 
-        # 2. Create context from retrieved chunks
         context = "\n\n".join(
             result["text"]
             for result in results
         )
 
-        # 3. Send context + question to LLM
         answer = await self.generate_answer(
             question=question,
             context=context
