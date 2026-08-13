@@ -1,6 +1,8 @@
 from fastapi import APIRouter,UploadFile,File,HTTPException, Depends
 from src.service.extraxctor_service import extractor 
 from src.dependencies import get_current_user
+from uuid import uuid4
+from pathlib import Path
 
 
 router  =APIRouter(
@@ -18,14 +20,19 @@ async def upload_document(file: UploadFile = File(...)):
         ".txt",
         ".png",
         ".jpg",
-        ".jpeg"
+        ".jpeg",
+        
     }
-
+    audio_extensions = {
+        ".mp3", ".wav", ".m4a", ".ogg", ".webm"
+    }
     filename = file.filename or ""
 
-    extension = filename.lower().rsplit(".", 1)[-1]
-    print(extension)
-    if f".{extension}" not in allowed_extensions:
+    extension = Path(filename).suffix.lower()
+    print("Filename:", filename)
+    print("Extension:", extension)
+    if extension not in allowed_extensions and extension not in audio_extensions:
+
         raise HTTPException(
             status_code=400,
             detail="Unsupported file type"
@@ -33,14 +40,27 @@ async def upload_document(file: UploadFile = File(...)):
 
     try:
         content = await file.read()
+        if extension in audio_extensions:
+            print(extension)
 
-        text = extractor.extract_text(
-            file_content=content,
-            filename=filename
-        )
-        chunks = extractor.create_chunks(text)
+            audio_segments = extractor.extract_text( file_content=content,filename=filename)
+            document_id = str(uuid4())
 
-        embeddings = await extractor.create_embeddings(chunks)
+            chunks =  extractor.create_audio_chunk(audio_segments=audio_segments,document_id=document_id,filename=filename )
+        else:
+            print(extension)
+            text = extractor.extract_text(
+                file_content=content,
+                filename=filename
+            )
+           
+            chunks = extractor.create_chunks(text)
+        texts = [
+        chunk["text"] if isinstance(chunk, dict) else chunk
+        for chunk in chunks
+         ]
+
+        embeddings = await extractor.create_embeddings(texts)
 
         document_id = await extractor.save_document(
             filename= filename,

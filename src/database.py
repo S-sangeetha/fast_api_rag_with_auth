@@ -70,6 +70,8 @@ class Database:
                     "file_name": 1,
                     "chunk_index": 1,
                     "text": 1,
+                    "start_time": 1,
+                    "end_time": 1,
                     "score": {
                         "$meta": "vectorSearchScore"
                     }
