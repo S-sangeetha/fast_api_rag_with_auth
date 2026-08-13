@@ -1,7 +1,7 @@
 from src.database import Database
 from src.service.extraxctor_service import extractor
 from src.llm_config import llm_embedding
-
+from src.service.rag_router import rag_router
 db = Database()
 class Chat: 
 
@@ -14,37 +14,69 @@ class Chat:
         if start_time is None or end_time is None:
             return None
 
-        start_minutes = int(start_time // 60)
-        start_seconds = int(start_time % 60)
+        def format_seconds(value: float) -> str:
+            minutes = int(value // 60)
+            seconds = int(value % 60)
 
-        end_minutes = int(end_time // 60)
-        end_seconds = int(end_time % 60)
+            return f"{minutes:02d}:{seconds:02d}"
 
         return (
-            f"{start_minutes:02d}:{start_seconds:02d}"
-            f" - "
-            f"{end_minutes:02d}:{end_seconds:02d}"
+            f"{format_seconds(start_time)} - "
+            f"{format_seconds(end_time)}"
         )
+
     
-    async def search_documents(self , question: str, limit: int = 5):
+    async def build_context(self, results):
+        context_parts = []
+        for result in results:
+            source_type = result.get("source_type", "document")
+            filename = result.get("file_name", "unknown")
+            text = result.get("text", "")
+            metadata = result.get("metadata", {})
+
+            part = f"[{source_type.upper()} SOURCE]\n"
+            part += f"File: {filename}\n" 
+
+            if source_type == "audio":
+                start_time = metadata.get("start_time")
+                end_time = metadata.get("end_time")
+
+                if start_time is not None and end_time is not None:
+                     timestamp = (
+                        f"{self.format_timestamp(start_time)} - "
+                        f"{self.format_timestamp(end_time)}"
+                    )
+                     part += f"Timestamp: {timestamp}\n"
+            part += f"Content:\n{text}"
+            context_parts.append(part)
+        return "\n\n---\n\n".join(context_parts)
+
+    async def search_documents(self , question: str, limit: int = 5, source_types: list[str] | None = None):
         query_embedding = await extractor.create_query_embeddings(question)
-        results = await db.vector_search(query_embedding = query_embedding ,limit=limit)
+        results = await db.vector_search(query_embedding = query_embedding ,limit=limit,source_types=source_types)
         RELEVANCE_THRESHOLD = 0.80
         results = [result for result in results if result["score"] >= RELEVANCE_THRESHOLD]
+        
         return results
 
 
     async def generate_answer(self, question : str , context :str):
         prompt = f"""
-            You are a helpful company knowledge assistant.
-
+        You are a helpful RAG assistant.
         Answer the user's question using ONLY the information
         provided in the context below.
-
-        If the answer cannot be found in the context,
-        say: "I couldn't find that information in the documents."
-
-        Do not make up information.
+        The context can contain information from different source types:
+        - DOCUMENT
+        - IMAGE
+        - AUDIO
+        Rules:
+        1. Do not invent information.
+        2. Do not use outside knowledge.
+        3. If the answer is not present in the context, say that you
+        could not find the answer in the provided sources.
+        4. For AUDIO sources, use the timestamp information when it
+        helps answer the question.
+        5. Keep the answer concise and accurate.
 
         Context:
         {context}
@@ -64,26 +96,45 @@ class Chat:
 
 
     async def generate_rag_answer(self,question: str,limit: int = 5):
+        source_type = await rag_router.classify_question(question)
+        if source_type == "text":
+            source_types = ["text"]
+
+        elif source_type == "audio":
+            source_types = ["audio"]
+
+        elif source_type == "image":
+            source_types = ["image"]
+
+        elif source_type == "multi":
+            source_types = ["text", "audio", "image"]
+
+        else:
+            source_types = None
 
         results = await self.search_documents(
             question,
-            limit
+            limit,
+            source_types=source_types
         )
+        
 
-        context = "\n\n".join(
-            result["text"]
-            for result in results
-        )
+        context =await self.build_context(results)
 
         answer = await self.generate_answer(
             question=question,
             context=context
         )
         for result in results:
-            result["timestamp"] = self.format_timestamp(
-            result.get("start_time"),
-            result.get("end_time")
+            metadata = result.get("metadata", {})
+            start_time = metadata.get("start_time")
+            end_time = metadata.get("end_time")
+            
+            result["timestamp"] =(
+            start_time,
+            end_time
             )
+           
         print(result)
         return {
             "question": question,

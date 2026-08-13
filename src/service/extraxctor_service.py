@@ -9,6 +9,11 @@ from src.database import Database
 from src.llm_config import  llm_embedding
 from src.service.audio_transcribe import audio_extract
 db =Database() 
+import pytesseract
+
+pytesseract.pytesseract.tesseract_cmd = (
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+)
 class Extractor:
     def extract_text(self, file_content: bytes, filename: str) -> str:
 
@@ -49,17 +54,30 @@ class Extractor:
                 "file_name":filename,
                 "chunk_index":index,
                 "text":segment["text"],
+                "source_type": "audio",
+                "metadata": {
                 "start_time":segment["start_time"],
                 "end_time":segment["end_time"]
+                }
             })
         return chunks
 
-    def create_chunks(self, text:str):
+    def create_chunks(self, text:str,document_id: str, filename:str , source_type:str):
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap = 50
         )
-        chunks = splitter.split_text(text)
+        chunked_text = splitter.split_text(text)
+        chunks = []
+        for index , chunk_text in enumerate(chunked_text):
+            chunks.append({
+                "document_id":document_id,
+                "file_name":filename,
+                "chunk_index":index,
+                "text":chunk_text,
+                "source_type":source_type,
+                "metadata":{}
+            })
         return chunks
     
     async def create_embeddings(self,chunks:list[str]):
@@ -77,8 +95,9 @@ class Extractor:
     async def save_document(
         self,
         filename: str,
-        chunks: list,
+        chunks: list[dict],
         embeddings: list[list[float]]
+       
     ):
         existing_document = await db.get_document_by_filename(filename)
 
@@ -86,38 +105,32 @@ class Extractor:
             document_id = existing_document["document_id"]
             await db.delete_chunks(document_id)
         else:
-            document_id = str(uuid4())
+            document_id = chunks[0]["document_id"]
 
         documents = []
-
-        for index, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-
-            # Audio chunk
+        for index, chunk in enumerate(chunks):
             if isinstance(chunk, dict):
-
-                documents.append({
-                    "document_id": document_id,
-                    "file_name": filename,
-                    "chunk_index": index,
-                    "text": chunk["text"],
-                    "start_time": chunk["start_time"],
-                    "end_time": chunk["end_time"],
-                    "embedding": embedding
-                })
-
-            # Normal text/PDF/image chunk
+                text = chunk["text"] 
+                source_type = chunk.get("source_type")
+                metadata = chunk.get("metadata", {})
             else:
+                 text= chunk
+                 source_type = "text",
+                 metadata ={}   
 
-                documents.append({
-                    "document_id": document_id,
-                    "file_name": filename,
-                    "chunk_index": index,
-                    "text": chunk,
-                    "embedding": embedding
-                })
+            document = {
+            "document_id": document_id,
+            "file_name": filename,
+            "chunk_index": index,
+            "text":text,
+            "source_type":source_type,
+            "metadata":metadata,
+            "embedding": embeddings[index]
+              }
+            documents.append(document)
 
         if documents:
-            await db.save_chunks(documents)
+            await db.save_chunks(chunks)
 
         return document_id
 

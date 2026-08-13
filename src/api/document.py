@@ -40,32 +40,36 @@ async def upload_document(file: UploadFile = File(...)):
 
     try:
         content = await file.read()
+        document_id = str(uuid4())
+        text = extractor.extract_text( file_content=content,filename=filename)
+
         if extension in audio_extensions:
-            print(extension)
+            
+            chunks =  extractor.create_audio_chunk(audio_segments=text,document_id=document_id,filename=filename)
+        else:   
+            source_type={
+                ".txt": "text",
+                ".pdf": "pdf",
+                ".png": "image",
+                ".jpg": "image",
+                ".jpeg": "image"
+            }[extension]
 
-            audio_segments = extractor.extract_text( file_content=content,filename=filename)
-            document_id = str(uuid4())
-
-            chunks =  extractor.create_audio_chunk(audio_segments=audio_segments,document_id=document_id,filename=filename )
-        else:
-            print(extension)
-            text = extractor.extract_text(
-                file_content=content,
-                filename=filename
-            )
-           
-            chunks = extractor.create_chunks(text)
+            chunks = extractor.create_chunks(text,document_id=document_id,filename=filename, source_type=source_type)
         texts = [
-        chunk["text"] if isinstance(chunk, dict) else chunk
+        chunk["text"] 
         for chunk in chunks
          ]
 
         embeddings = await extractor.create_embeddings(texts)
 
+        for chunk, embedding in zip(chunks, embeddings):
+            chunk["embedding"] = embedding
+
         document_id = await extractor.save_document(
             filename= filename,
             chunks = chunks,
-            embeddings = embeddings
+            embeddings= embedding
         )
         return {
             "document_id": document_id,

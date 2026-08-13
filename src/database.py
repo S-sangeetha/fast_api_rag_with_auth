@@ -48,21 +48,31 @@ class Database:
          return document    
 
     async def vector_search(
-        self,
-        query_embedding: list[float],
-        limit: int = 5
-    ):
-        
+    self,
+    query_embedding: list[float],
+    limit: int = 5,
+    source_types: list[str] | None = None
+):
+        vector_search_stage = {
+            "$vectorSearch": {
+                "index": "vector_index",
+                "path": "embedding",
+                "queryVector": query_embedding,
+                "numCandidates": 100,
+                "limit": limit
+            }
+        }
+
+        # Add filter only when we actually want to restrict sources
+        if source_types:
+            vector_search_stage["$vectorSearch"]["filter"] = {
+            "source_type": {
+                "$in": source_types
+            }
+        }
+
         pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": "vector_index",
-                    "path": "embedding",
-                    "queryVector": query_embedding,
-                    "numCandidates": 100,
-                    "limit": limit
-                }
-            },
+            vector_search_stage,
             {
                 "$project": {
                     "_id": 0,
@@ -70,8 +80,8 @@ class Database:
                     "file_name": 1,
                     "chunk_index": 1,
                     "text": 1,
-                    "start_time": 1,
-                    "end_time": 1,
+                    "source_type": 1,
+                    "metadata": 1,
                     "score": {
                         "$meta": "vectorSearchScore"
                     }
@@ -80,5 +90,5 @@ class Database:
         ]
 
         cursor = self.file_collection.aggregate(pipeline)
-        
+
         return await cursor.to_list(length=limit)

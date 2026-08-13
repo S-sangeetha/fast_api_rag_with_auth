@@ -27,9 +27,10 @@ class audioExtract:
 
         for segment in result["segments"]:
             chunks.append({
+                "text": segment["text"].strip(),
                 "start_time": segment["start"],
-                "end_time": segment["end"],
-                "text": segment["text"].strip()
+                "end_time": segment["end"]
+               
             })
 
         return chunks
