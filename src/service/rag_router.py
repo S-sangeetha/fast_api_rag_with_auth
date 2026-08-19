@@ -1,77 +1,101 @@
 from src.llm_config import llm_embedding
+from src.hf_llm import  hf_llm
+from src.database import Database
+db = Database()
 
 class Router:
 
-    async def classify_question(self, question: str) -> str:
+   async def classify_question(self, question: str):
 
-        question_lower = question.lower()
+        source_types = await db.get_source_types()
 
-        audio_keywords = [
-            "recording",
-            "audio",
-            "voice",
-            "said",
-            "says",
-            "sound",
-            "heard"
+        source_types_text = "\n".join(
+            f"- {source_type}"
+            for source_type in source_types
+        )
+
+        prompt = f"""
+You are a RAG source router.
+
+Available source types in the knowledge base:
+
+{source_types_text}
+
+The user question may require information from one
+or multiple source types.
+
+Determine which source types are required to answer
+the question.
+
+Rules:
+
+1. Select only source types that are actually needed.
+2. If only one source type is required, return that source type.
+3. If multiple source types are required, return "multi".
+4. Return ONLY one of the following:
+
+{chr(10).join(source_types)}
+multi
+
+Question:
+{question}
+
+Answer:
+"""
+
+        response = await hf_llm.generate(prompt)
+
+        result = response.strip().lower()
+
+        print("AVAILABLE SOURCES:", source_types)
+        print("CLASSIFIER RESULT:", result)
+
+        if result in source_types:
+            return result
+
+        if result == "multi":
+            return "multi"
+
+        return "multi"
+
+    
+   async def decompose_question(self, question: str) -> list[dict]:
+
+            prompt = f"""
+        You are a question routing system for a Multi-RAG application.
+
+        Break the user's question into independent sub-questions.
+
+        For each sub-question, identify the most appropriate source type.
+
+        Allowed source types:
+        - text
+        - image
+        - audio
+
+        If a question requires multiple source types, create separate sub-questions.
+
+        Return ONLY valid JSON in this exact format:
+
+        [
+            {{
+                "question": "sub-question",
+                "source_type": "text"
+            }}
         ]
 
-        image_keywords = [
-            "image",
-            "picture",
-            "photo",
-            "chart",
-            "diagram",
-            "shown",
-            "visible"
-        ]
+        User question:
+        {question}
+        """
 
-        if any(word in question_lower for word in audio_keywords):
-            return "audio"
+            content = await hf_llm.generate(prompt)
 
-        if any(word in question_lower for word in image_keywords):
-            return "image"
+            import json
 
-        return "text"
-    # async def classify_question(self, question: str):
-
-    #     prompt = f"""
-    #     Determine which source types are needed to answer this question.
-
-    #     Available source types:
-    #     - text
-    #     - image
-    #     - audio
-    #     - multi
-
-    #     Question:
-    #     {question}
-
-    #     Return only one:
-    #     text
-    #     image
-    #     audio
-    #     multi
-    #     """
-
-    #     response = await llm_embedding.llm.ainvoke(prompt)
-    #     source_type = "".join(
-    #         block["text"]
-    #         for block in response.content
-    #         if isinstance(block, dict)
-    #         and block.get("type") == "text"
-    #     ).strip().lower()
-
-    #     allowed_types = {
-    #         "text",
-    #         "image",
-    #         "audio",
-    #         "multi"
-    #     }
-
-    #     if source_type not in allowed_types:
-    #         source_type = "multi"
-        
-    #     return source_type
-
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                raise ValueError(
+                    f"Invalid decomposition response from LLM: {content}"
+                )
 rag_router = Router()

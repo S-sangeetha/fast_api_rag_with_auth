@@ -46,7 +46,10 @@ class Database:
     async def get_document_by_filename(self ,filename):
          document = await self.file_collection.find_one({"file_name": filename})
          return document    
-
+    
+    async def get_source_types(self):
+     return await self.file_collection.distinct("source_type")
+    
     async def vector_search(
     self,
     query_embedding: list[float],

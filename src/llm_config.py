@@ -14,6 +14,8 @@ class LlmEmbedding:
                 temperature=0
             )
 
+            
+
             self.embeddings = GoogleGenerativeAIEmbeddings(
                 model="gemini-embedding-001",
                 google_api_key=os.getenv("GOOGLE_API_KEY"),

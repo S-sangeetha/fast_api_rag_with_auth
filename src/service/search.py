@@ -1,6 +1,8 @@
 from src.database import Database
 from src.service.extraxctor_service import extractor
 from src.llm_config import llm_embedding
+from src.hf_llm import hf_llm
+
 from src.service.rag_router import rag_router
 db = Database()
 class Chat: 
@@ -24,7 +26,7 @@ class Chat:
             f"{format_seconds(start_time)} - "
             f"{format_seconds(end_time)}"
         )
-
+    #all sources are in one context.
     
     async def build_context(self, results):
         context_parts = []
@@ -87,38 +89,44 @@ class Chat:
         Answer:
         """
 
-        response = await llm_embedding.llm.ainvoke(prompt)
+        response = await hf_llm.generate(prompt)
 
-        return "".join(
-            block["text"]
-            for block in response.content
-              if isinstance(block, dict) and block.get("type") == "text")
+        return response
 
 
     async def generate_rag_answer(self,question: str,limit: int = 5):
         source_type = await rag_router.classify_question(question)
-        if source_type == "text":
-            source_types = ["text"]
-
-        elif source_type == "audio":
-            source_types = ["audio"]
-
-        elif source_type == "image":
-            source_types = ["image"]
-
-        elif source_type == "multi":
-            source_types = ["text", "audio", "image"]
-
-        else:
-            source_types = None
-
-        results = await self.search_documents(
-            question,
-            limit,
-            source_types=source_types
-        )
         
+        if source_type != "multi":
+            if source_type in ["text", "audio", "image"]:
+             source_types = [source_type]
+            else:
+              source_types = None
 
+            results = await self.search_documents(
+                question,
+                limit,
+                source_types=source_types
+            )
+        
+        else: 
+            sub_questions = await rag_router.decompose_question(question)
+            print("SUB QUESTIONS:", sub_questions)
+
+            results = []
+            for item in sub_questions:  
+                 sub_question = item["question"]
+                 sub_source_type = item["source_type"]
+                 print(
+                    f"Searching: {sub_question} "
+                    f"| Source: {sub_source_type}"
+                )
+                 sub_results = await self.search_documents(
+                sub_question,
+                limit,
+                source_types=[sub_source_type]
+            )
+                 results.extend(sub_results)
         context =await self.build_context(results)
 
         answer = await self.generate_answer(
@@ -130,10 +138,13 @@ class Chat:
             start_time = metadata.get("start_time")
             end_time = metadata.get("end_time")
             
-            result["timestamp"] =(
-            start_time,
-            end_time
-            )
+            if start_time is not None and end_time is not None:
+                result["timestamp"] = {
+                    "start_time": start_time,
+                    "end_time": end_time
+                }
+            else:
+                result["timestamp"] = None
            
         print(result)
         return {
