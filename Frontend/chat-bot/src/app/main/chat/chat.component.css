@@ -1,0 +1,25 @@
+.chat-container {
+  max-width: 800px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-body {
+  flex: 1;
+  background-color: #f8f9fa;
+}
+
+.fs-7 {
+  font-size: 0.75rem;
+}
+
+label[for="fileUpload"]:hover {
+  background-color: #e9ecef !important;
+  color: #0d6efd !important;
+}
+
+button[type="submit"]:hover {
+  transform: scale(1.05);
+  transition: transform 0.15s ease-in-out;
+}

@@ -4,6 +4,8 @@ from src.api.auth import router as auth_router
 from src.api.document import router as doc_router
 from src.api.search import router as search_router
 app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
+
 from src.database import Database
 db = Database()
 
@@ -12,6 +14,15 @@ async def startup():
    
     await db.create_indexes()  
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+       "*"
+    ],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/")
 def root():
     return {"message": "API is Running"}

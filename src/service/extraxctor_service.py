@@ -16,7 +16,7 @@ pytesseract.pytesseract.tesseract_cmd = (
 )
 class Extractor:
     def extract_text(self, file_content: bytes, filename: str) -> str:
-
+        
         extension = Path(filename).suffix.lower()
 
         if extension == ".txt":

@@ -8,13 +8,13 @@ from pathlib import Path
 router  =APIRouter(
     prefix="/documents",
     tags=["Document"],
-    dependencies=[Depends(get_current_user)]
+    # dependencies=[Depends(get_current_user)]
     
 )
 
 @router.post("/upload")
 async def upload_document(file: UploadFile = File(...)):
-
+        
     allowed_extensions = {
         ".pdf",
         ".txt",
@@ -62,14 +62,14 @@ async def upload_document(file: UploadFile = File(...)):
          ]
 
         embeddings = await extractor.create_embeddings(texts)
-
+        
         for chunk, embedding in zip(chunks, embeddings):
             chunk["embedding"] = embedding
 
         document_id = await extractor.save_document(
             filename= filename,
             chunks = chunks,
-            embeddings= embedding
+            embeddings= embeddings
         )
         return {
             "document_id": document_id,
