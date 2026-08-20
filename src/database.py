@@ -32,6 +32,10 @@ class Database:
         user  = self.user_collection.find_one({"email": email})
         return user
     
+    async def create_indexes(self):   
+        await self.file_collection.create_index(
+            [("text", "text")]
+        )
     async def delete_chunks( self,document_id: str):
 
         await self.file_collection.delete_many({
@@ -95,3 +99,44 @@ class Database:
         cursor = self.file_collection.aggregate(pipeline)
 
         return await cursor.to_list(length=limit)
+
+    async def keyword_search(self,question: str, limit: int = 10,source_types: list[str] | None = None):
+        query = {
+            "$text": {
+                "$search": question
+            }
+        }
+
+        if source_types:
+            query["source_type"] = {
+                "$in": source_types
+            }
+
+        cursor = (
+            self.file_collection
+            .find(query ,  {
+            "_id": 0,
+            "score": {
+                "$meta": "textScore"
+            }
+        })
+            .sort(
+                [("score", {"$meta": "textScore"})]
+            )
+            .limit(limit)
+        )
+
+        results = []
+
+        async for document in cursor:
+
+            document["keyword_score"] = (
+                document.get(
+                    "score",
+                    0
+                )
+            )
+
+            results.append(document)
+
+        return results

@@ -16,7 +16,7 @@ class HuggingFaceLLM:
     async def generate(self, prompt: str):
 
         response =self.client.chat.completions.create(
-            model="Qwen/Qwen2.5-7B-Instruct",
+            model="meta-llama/Llama-3.1-8B-Instruct",
             messages=[
                 {
                     "role": "user",

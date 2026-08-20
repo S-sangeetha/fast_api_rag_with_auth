@@ -4,6 +4,13 @@ from src.api.auth import router as auth_router
 from src.api.document import router as doc_router
 from src.api.search import router as search_router
 app = FastAPI()
+from src.database import Database
+db = Database()
+
+@app.on_event("startup")
+async def startup():
+   
+    await db.create_indexes()  
 
 @app.get("/")
 def root():
