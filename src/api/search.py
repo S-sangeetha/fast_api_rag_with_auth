@@ -5,17 +5,17 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 
 # http
-# router = APIRouter(
-#     prefix="/rag",
-#     tags=["Search"],
-#     dependencies=[Depends(get_current_user)]
+router = APIRouter(
+    prefix="/rag",
+    tags=["Search"],
+    dependencies=[Depends(get_current_user)]
 
-# )
+)
 
-# @router.post("/chat")
-# async def chat(question: str):
+@router.post("/chat")
+async def chat(question: str):
 
-#     return await chat_service.generate_rag_answer(question)
+    return await chat_service.generate_rag_answer(question)
 
 # websocket
 router = APIRouter()
